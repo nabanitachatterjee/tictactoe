@@ -4,24 +4,65 @@ import com.gameboard.tictactoe.IO.PlayerMove;
 import com.gameboard.tictactoe.IO.TicTacToeIO;
 import com.gameboard.tictactoe.exception.BoardUnavailableException;
 import com.gameboard.tictactoe.exception.MovesNotAllowedException;
+import com.gameboard.tictactoe.model.Game;
+import com.gameboard.tictactoe.model.Move;
+import com.gameboard.tictactoe.repository.GameBoardRepository;
+import com.gameboard.tictactoe.repository.MovesRepository;
 import org.springframework.stereotype.Service;
 
 import javax.servlet.http.HttpSession;
+import java.util.Collections;
+import java.util.List;
 import java.util.Random;
+
+import static com.gameboard.tictactoe.utilities.GameBoard.*;
 
 @Service
 public class TicTacToeService {
 
-    public boolean boardHasEmptySpaces(int[] board) {
+    private final GameBoardRepository gameBoardRepository;
+    private final MovesRepository movesRepository;
 
-        boolean hasEmptySpaces = false;
-        for (int j : board) {
-            if (j == -1) {
-                hasEmptySpaces = true;
-                break;
-            }
+    public TicTacToeService(GameBoardRepository gameBoardRepository, MovesRepository movesRepository) {
+        this.gameBoardRepository = gameBoardRepository;
+        this.movesRepository = movesRepository;
+    }
+
+    public TicTacToeIO createGameBoard(String gameType) {
+        Game game = new Game();
+        if ("MULTIPLAYER".equalsIgnoreCase(gameType)) {
+            game.setGameType("MULTI");
         }
-        return hasEmptySpaces;
+        Game savedGame = gameBoardRepository.save(game);
+        TicTacToeIO response = new TicTacToeIO();
+        response.setBoard(createFreshGameBoard());
+        response.setSessionId(savedGame.getId());
+        return response;
+    }
+    public TicTacToeIO getCurrentGameBoard(int sessionId) {
+       //query moves table by game_id
+        //if no player with game id create fresh game board
+        TicTacToeIO response = new TicTacToeIO();
+        if(queryMovesForSessionId(sessionId).isEmpty()) {
+            response.setBoard(createFreshGameBoard());
+            response.setSessionId(sessionId);
+        }
+        /*if (checkWinner(board, 1) || checkWinner(board, 0)) {
+            response.setWinner((String) httpSession.getAttribute("Winner"));
+        } else if (!GameBoard.boardHasEmptySpaces(board)) {
+            response.setErrorMessage("Match Drawn.You can play new game.");
+        }*/
+        return response;
+    }
+
+    public List<Move> queryMovesForSessionId(int sessionId) {
+        List<Move> moves = null;
+        try {
+            moves = movesRepository.findAllById(Collections.singleton(sessionId));
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+        return moves;
     }
 
     public void displayGameBoard(int[] board) {
@@ -36,16 +77,12 @@ public class TicTacToeService {
         }
     }
 
-    private boolean isEmpty(int place) {
-        return place == -1;
-    }
-
     public boolean checkValidPosition(int[] board, PlayerMove playerMove) throws MovesNotAllowedException {
         boolean isValid = validatePosition(playerMove.getPosition(), board);
         if (!isValid) {
             throw new MovesNotAllowedException("The position entered is wrong. Please try again");
         }
-        if(!(playerMove.getSymbol()==1 || playerMove.getSymbol()==0)){
+        if (!(playerMove.getSymbol() == 1 || playerMove.getSymbol() == 0)) {
             throw new MovesNotAllowedException("The symbol entered is wrong. Please try again");
         }
         board[playerMove.getPosition()] = playerMove.getSymbol();
@@ -77,14 +114,7 @@ public class TicTacToeService {
     }
 
     public boolean checkWinner(int[] board, int symbol) {
-        return symbol == board[0] && symbol == board[1] && symbol == board[2] ||
-                symbol == board[0] && symbol == board[3] && symbol == board[6] ||
-                symbol == board[0] && symbol == board[4] && symbol == board[8] ||
-                symbol == board[1] && symbol == board[4] && symbol == board[7] ||
-                symbol == board[2] && symbol == board[5] && symbol == board[8] ||
-                symbol == board[2] && symbol == board[4] && symbol == board[6] ||
-                symbol == board[3] && symbol == board[4] && symbol == board[5] ||
-                symbol == board[6] && symbol == board[7] && symbol == board[8];
+        return symbol == board[0] && symbol == board[1] && symbol == board[2] || symbol == board[0] && symbol == board[3] && symbol == board[6] || symbol == board[0] && symbol == board[4] && symbol == board[8] || symbol == board[1] && symbol == board[4] && symbol == board[7] || symbol == board[2] && symbol == board[5] && symbol == board[8] || symbol == board[2] && symbol == board[4] && symbol == board[6] || symbol == board[3] && symbol == board[4] && symbol == board[5] || symbol == board[6] && symbol == board[7] && symbol == board[8];
     }
 
     private static boolean validatePosition(int playerPos, int[] board) {
@@ -94,12 +124,10 @@ public class TicTacToeService {
         return board[playerPos] == -1;
     }
 
-    public int[] winnerBoard(int player, HttpSession httpSession,
-                             PlayerMove playerMove, int[] board, TicTacToeIO ticTacToeIO, String gameType) {
+    public int[] winnerBoard(int player, HttpSession httpSession, PlayerMove playerMove, int[] board, TicTacToeIO ticTacToeIO, String gameType) {
         if (null == gameType || !gameType.equalsIgnoreCase("MULTIPLAYER")) {
             if (player == 1) {
-                if (playerMove(player, httpSession, playerMove, board, ticTacToeIO))
-                    return board;
+                if (playerMove(player, httpSession, playerMove, board, ticTacToeIO)) return board;
 
             } else {
                 ticTacToeIO.setErrorMessage("Only single player is playing");
@@ -132,12 +160,12 @@ public class TicTacToeService {
     }
 
     private void validateLastMove(HttpSession httpSession, PlayerMove playerMove) {
-        if(null== httpSession.getAttribute("LastMove")){
+        if (null == httpSession.getAttribute("LastMove")) {
             httpSession.setAttribute("LastMove", playerMove.getSymbol());
-        }else{
-            if(httpSession.getAttribute("LastMove").equals(playerMove.getSymbol())){
+        } else {
+            if (httpSession.getAttribute("LastMove").equals(playerMove.getSymbol())) {
                 throw new MovesNotAllowedException("You entered wrong symbol");
-            }else{
+            } else {
                 httpSession.setAttribute("LastMove", playerMove.getSymbol());
             }
         }

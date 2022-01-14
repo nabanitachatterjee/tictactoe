@@ -6,9 +6,9 @@
         xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
          http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.1.xsd">
 
-    <include file="db/changelog/createInitialTables.xml"/>
-    <include file="db/changelog/updateMovesTable.xml"/>
-    <include file="db/changelog/addDefaultToTableGame.xml"/>
-    <include file="db/changelog/removePrimaryKeyInMoves.xml"/>
-
+    <changeSet id="3" author="nabanita">
+        <addDefaultValue columnName="game_type"
+                         defaultValue="SINGLE"
+                         tableName="games" columnDataType="varchar(10)"/>
+    </changeSet>
 </databaseChangeLog>
