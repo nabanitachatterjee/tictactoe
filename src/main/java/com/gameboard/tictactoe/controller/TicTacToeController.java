@@ -3,7 +3,6 @@ package com.gameboard.tictactoe.controller;
 import com.gameboard.tictactoe.IO.GameType;
 import com.gameboard.tictactoe.IO.PlayerMove;
 import com.gameboard.tictactoe.IO.TicTacToeIO;
-import com.gameboard.tictactoe.repository.InMemoryRepository;
 import com.gameboard.tictactoe.service.TicTacToeService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;

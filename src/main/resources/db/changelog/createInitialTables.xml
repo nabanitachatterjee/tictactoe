@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<databaseChangeLog
+        xmlns="http://www.liquibase.org/xml/ns/dbchangelog"
+        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+        xsi:schemaLocation="http://www.liquibase.org/xml/ns/dbchangelog
+         http://www.liquibase.org/xml/ns/dbchangelog/dbchangelog-3.1.xsd">
+
+<changeSet id="01" author="nabanita">
+    <createTable tableName="games"
+                 remarks="A table to contain all tictactoe games">
+        <column name="id" type="bigserial" autoIncrement="true">
+            <constraints nullable="false" unique="true" primaryKey="true"/>
+        </column>
+        <column name="game_type" type="varchar(10)">
+            <constraints nullable="false"/>
+        </column>
+    </createTable>
+    <createTable tableName="moves"
+                 remarks="A table to contain all moves for each tictactoe game ">
+        <column name="player" type="smallint"/>
+        <column name="game_id" type="bigserial">
+            <constraints nullable="false" foreignKeyName="fk_moves_games" references="games(id)"/>
+        </column>
+        <column name="position" type="smallint"/>
+        <column name="symbol" type="smallint"/>
+    </createTable>
+</changeSet>
+</databaseChangeLog>
