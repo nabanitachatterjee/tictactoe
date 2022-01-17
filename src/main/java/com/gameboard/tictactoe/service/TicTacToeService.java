@@ -8,11 +8,17 @@ import com.gameboard.tictactoe.model.Game;
 import com.gameboard.tictactoe.model.Move;
 import com.gameboard.tictactoe.repository.GameBoardRepository;
 import com.gameboard.tictactoe.repository.MovesRepository;
+import com.gameboard.tictactoe.utilities.GameBoard;
+import liquibase.pro.packaged.M;
 import org.springframework.stereotype.Service;
 
+import javax.persistence.EntityNotFoundException;
+import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
-import java.util.Collections;
+import javax.transaction.Transactional;
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.Random;
 
 import static com.gameboard.tictactoe.utilities.GameBoard.*;
@@ -28,7 +34,7 @@ public class TicTacToeService {
         this.movesRepository = movesRepository;
     }
 
-    public TicTacToeIO createGameBoard(String gameType) {
+    public TicTacToeIO createGameBoard(String gameType, HttpServletRequest request) {
         Game game = new Game();
         if ("MULTIPLAYER".equalsIgnoreCase(gameType)) {
             game.setGameType("MULTI");
@@ -36,49 +42,55 @@ public class TicTacToeService {
         Game savedGame = gameBoardRepository.save(game);
         TicTacToeIO response = new TicTacToeIO();
         response.setBoard(createFreshGameBoard());
+        request.getSession().setAttribute("Board", response.getBoard());
         response.setSessionId(savedGame.getId());
         return response;
     }
-    public TicTacToeIO getCurrentGameBoard(int sessionId) {
-       //query moves table by game_id
-        //if no player with game id create fresh game board
+
+    public TicTacToeIO getCurrentGameBoard(HttpSession httpSession, int sessionId) {
         TicTacToeIO response = new TicTacToeIO();
-        if(queryMovesForSessionId(sessionId).isEmpty()) {
-            response.setBoard(createFreshGameBoard());
-            response.setSessionId(sessionId);
+        int[] board = (int[]) httpSession.getAttribute("Board");
+        if (null == board) {
+            board = createFreshGameBoard();
         }
-        /*if (checkWinner(board, 1) || checkWinner(board, 0)) {
-            response.setWinner((String) httpSession.getAttribute("Winner"));
-        } else if (!GameBoard.boardHasEmptySpaces(board)) {
+        Optional<Game> game = queryGamesForId(sessionId);
+        if (game.isEmpty()) {
+            throw new BoardUnavailableException("Board is not available. Please create board to play.");
+        }
+
+        Move move = queryMoveForSessionId(sessionId);
+        checkWinner(response, move);
+        if (response.getWinner() == null && !GameBoard.boardHasEmptySpaces(board)) {
             response.setErrorMessage("Match Drawn.You can play new game.");
-        }*/
+        }
+        response.setBoard(board);
+        response.setSessionId(sessionId);
         return response;
     }
 
-    public List<Move> queryMovesForSessionId(int sessionId) {
-        List<Move> moves = null;
+    private void checkWinner(TicTacToeIO response, Move move) {
         try {
-            moves = movesRepository.findAllById(Collections.singleton(sessionId));
+            if (move.getWinner().equalsIgnoreCase("Y")) {
+                response.setWinner(String.valueOf(move.getPlayer()));
+            }
+        } catch (EntityNotFoundException e) {
+            e.printStackTrace();
+        }
+    }
+
+    public Move queryMoveForSessionId(int sessionId) {
+        Move move = new Move();
+        try {
+            move = movesRepository.getById(sessionId);
         } catch (Exception e) {
             e.printStackTrace();
         }
-        return moves;
+        return move;
     }
 
-    public void displayGameBoard(int[] board) {
-        if (null != board && board.length != 0) {
-            System.out.println((isEmpty(board[0]) ? " " : board[0]) + "|" + (isEmpty(board[1]) ? " " : board[1]) + "|" + (isEmpty(board[2]) ? " " : board[2]));
-            System.out.println("-" + "+" + " " + "+" + "-");
-            System.out.println((isEmpty(board[3]) ? " " : board[3]) + "|" + (isEmpty(board[4]) ? " " : board[4]) + "|" + (isEmpty(board[5]) ? " " : board[5]));
-            System.out.println("-" + "+" + " " + "+" + "-");
-            System.out.println((isEmpty(board[6]) ? " " : board[6]) + "|" + (isEmpty(board[7]) ? " " : board[7]) + "|" + (isEmpty(board[8]) ? " " : board[8]));
-        } else {
-            throw new BoardUnavailableException("Board is not available yet. Please create board to play.");
-        }
-    }
-
-    public boolean checkValidPosition(int[] board, PlayerMove playerMove) throws MovesNotAllowedException {
+    public boolean checkValidPositionAndSymbol(int[] board, PlayerMove playerMove, int player, int sessionId) throws MovesNotAllowedException {
         boolean isValid = validatePosition(playerMove.getPosition(), board);
+        validateLastMove(playerMove, player, sessionId);
         if (!isValid) {
             throw new MovesNotAllowedException("The position entered is wrong. Please try again");
         }
@@ -86,11 +98,16 @@ public class TicTacToeService {
             throw new MovesNotAllowedException("The symbol entered is wrong. Please try again");
         }
         board[playerMove.getPosition()] = playerMove.getSymbol();
+        addMoves(player, sessionId, playerMove);
+        Move move = new Move();
+        move.setGameId(sessionId);
+        move.setWinner("N");
+        move.setLastMove("Y");
+        movesRepository.save(move);
         return checkWinner(board, playerMove.getSymbol());
     }
 
-    public boolean computerMove(int[] board, PlayerMove playerMove) {
-
+    public boolean computerMove(int[] board, PlayerMove playerMove, int sessionId) {
         int[] emptySpaces = new int[9];
         int j = 0;
         for (int i = 0; i < board.length; i++) {
@@ -110,6 +127,8 @@ public class TicTacToeService {
         } else {
             throw new MovesNotAllowedException("No empty position left.Match drawn.");
         }
+        addMoves(0, sessionId, playerMove);
+        //    movesRepository.updateLastMove("N",sessionId,1);
         return checkWinner(board, 1);
     }
 
@@ -124,71 +143,133 @@ public class TicTacToeService {
         return board[playerPos] == -1;
     }
 
-    public int[] winnerBoard(int player, HttpSession httpSession, PlayerMove playerMove, int[] board, TicTacToeIO ticTacToeIO, String gameType) {
-        if (null == gameType || !gameType.equalsIgnoreCase("MULTIPLAYER")) {
+    public int[] currentBoard(int player, PlayerMove playerMove, int[] board, TicTacToeIO ticTacToeIO, String gameType, int sessionId) {
+        if (null == gameType || !gameType.equalsIgnoreCase("MULTI")) {
             if (player == 1) {
-                if (playerMove(player, httpSession, playerMove, board, ticTacToeIO)) return board;
+                if (playerMove(player, playerMove, board, ticTacToeIO, sessionId)) {
+                    //    movesRepository.updateWinner("Y", sessionId, player);
+                    return board;
+                }
 
             } else {
                 ticTacToeIO.setErrorMessage("Only single player is playing");
                 return board;
             }
-            if (setComputerMove(httpSession, board, ticTacToeIO, playerMove)) return board;
+            if (setComputerMove(board, ticTacToeIO, playerMove, sessionId)) {
+                //         movesRepository.updateWinner("Y", sessionId, 0);
+                return board;
+            }
         } else {
-            if (setPlayerMoves(player, httpSession, playerMove, board, ticTacToeIO)) return board;
+            if (setPlayerMoves(player, playerMove, board, ticTacToeIO, sessionId)) {
+                return board;
+            }
         }
         return board;
 
     }
 
-    private boolean setPlayerMoves(int player, HttpSession httpSession, PlayerMove playerMove, int[] board, TicTacToeIO ticTacToeIO) {
-        if (player == 1) {
-            // check last session values
-            // if unavailable, directly set the current session values
-            // if available, validate, the player is not making wrong move, set current session
+    private boolean setPlayerMoves(int player, PlayerMove playerMove, int[] board, TicTacToeIO ticTacToeIO, int sessionId) {
+        if (player == 1 && playerMove(player, playerMove, board, ticTacToeIO, sessionId)) {
+            addMoves(player, sessionId, playerMove);
+            return true;
 
-            validateLastMove(httpSession, playerMove);
-            return playerMove(player, httpSession, playerMove, board, ticTacToeIO);
-
-        } else if (player == 2) {
-            validateLastMove(httpSession, playerMove);
-            return playerMove(player, httpSession, playerMove, board, ticTacToeIO);
+        } else if (player == 2 && playerMove(player, playerMove, board, ticTacToeIO, sessionId)) {
+            addMoves(player, sessionId, playerMove);
+            return true;
         } else {
             ticTacToeIO.setErrorMessage("Only 2 players are playing");
             return true;
         }
     }
 
-    private void validateLastMove(HttpSession httpSession, PlayerMove playerMove) {
-        if (null == httpSession.getAttribute("LastMove")) {
-            httpSession.setAttribute("LastMove", playerMove.getSymbol());
-        } else {
-            if (httpSession.getAttribute("LastMove").equals(playerMove.getSymbol())) {
+    private void validateLastMove(PlayerMove playerMove, int player, int sessionId) {
+        //query last move from moves for particular sessionid
+        Move move = movesRepository.getById(sessionId);
+       // if (optionalMove.isPresent()) {
+            //Move move = optionalMove.get();
+            if (move.getPlayer() != player && move.getSymbol() == playerMove.getSymbol()) {
                 throw new MovesNotAllowedException("You entered wrong symbol");
-            } else {
-                httpSession.setAttribute("LastMove", playerMove.getSymbol());
             }
-        }
+        //}
     }
 
-    private boolean setComputerMove(HttpSession httpSession, int[] board, TicTacToeIO ticTacToeIO, PlayerMove playerMove) {
-        if (computerMove(board, playerMove)) {
+    private boolean setComputerMove(int[] board, TicTacToeIO ticTacToeIO, PlayerMove playerMove, int sessionId) {
+        if (computerMove(board, playerMove, sessionId)) {
             System.out.println("Computer wins");
             ticTacToeIO.setWinner("CPU");
-            httpSession.setAttribute("Winner", "CPU");
             return true;
         }
         return false;
     }
 
-    private boolean playerMove(int player, HttpSession httpSession, PlayerMove playerMove, int[] board, TicTacToeIO ticTacToeIO) {
-        if (checkValidPosition(board, playerMove)) {
+    private boolean playerMove(int player, PlayerMove playerMove, int[] board, TicTacToeIO ticTacToeIO, int sessionId) {
+        if (checkValidPositionAndSymbol(board, playerMove, player, sessionId)) {
             System.out.println("Player" + player + " wins");
             ticTacToeIO.setWinner(String.valueOf(player));
-            httpSession.setAttribute("Winner", String.valueOf(player));
             return true;
         }
         return false;
     }
 
+    public Optional<Game> queryGamesForId(int sessionId) {
+        try {
+            Game game = gameBoardRepository.getById(sessionId);
+            game.getGameType();
+            return Optional.of(game);
+        } catch (EntityNotFoundException e) {
+            e.printStackTrace();
+            return Optional.empty();
+        }
+    }
+
+    public TicTacToeIO putPlayerSymbolAtPosition(int player, int sessionId, HttpSession httpSession, PlayerMove playerMove) {
+        int[] updatedBoard;
+        TicTacToeIO ticTacToeIO = new TicTacToeIO();
+        int[] board = (int[]) httpSession.getAttribute("Board");
+        if (null == board) {
+            board = createFreshGameBoard();
+        }
+        ticTacToeIO.setSessionId(sessionId);
+        Optional<Game> optionalGame = queryGamesForId(sessionId);
+        Game game;
+        if (optionalGame.isPresent()) {
+            game = optionalGame.get();
+        } else {
+            throw new BoardUnavailableException("Board is not yet available, please create a board to play");
+        }
+        Move move = queryMoveForSessionId(sessionId);
+        checkWinner(ticTacToeIO, move);
+        if (ticTacToeIO.getWinner() != null) {
+            ticTacToeIO.setBoard(board);
+            return ticTacToeIO;
+        } else {
+            if (GameBoard.boardHasEmptySpaces(board)) {
+                if (!checkWinner(board, playerMove.getSymbol())) {
+                    updatedBoard = currentBoard(player, playerMove, board, ticTacToeIO, game.getGameType(), sessionId);
+                    ticTacToeIO.setBoard(board);
+                } else {
+                    ticTacToeIO.setErrorMessage("Game over! Winner is player " + ticTacToeIO.getWinner());
+                    httpSession.setAttribute("Board", board);
+                    return ticTacToeIO;
+                }
+            } else {
+                ticTacToeIO.setErrorMessage("Match Drawn.You can play again.");
+                httpSession.setAttribute("Board", board);
+                return ticTacToeIO;
+            }
+        }
+        httpSession.setAttribute("Board", updatedBoard);
+        return ticTacToeIO;
+    }
+
+    private void addMoves(int player, int sessionId, PlayerMove playerMove) {
+        Move move = new Move();
+        move.setPlayer(player);
+        move.setGameId(sessionId);
+        move.setSymbol(playerMove.getSymbol());
+        move.setPosition(playerMove.getPosition());
+        move.setWinner("N");
+        move.setLastMove("Y");
+        movesRepository.save(move);
+    }
 }

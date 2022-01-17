@@ -10,5 +10,7 @@
     <include file="db/changelog/updateMovesTable.xml"/>
     <include file="db/changelog/addDefaultToTableGame.xml"/>
     <include file="db/changelog/removePrimaryKeyInMoves.xml"/>
+    <include file="db/changelog/addColumnInMoves.xml"/>
+    <include file="db/changelog/updatePkInMoves.xml"/>
 
 </databaseChangeLog>

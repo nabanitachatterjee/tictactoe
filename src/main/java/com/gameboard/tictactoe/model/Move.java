@@ -8,7 +8,7 @@ import java.io.Serializable;
 public class Move implements Serializable {
     @Column(name = "player")
     private int player;
-
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "game_id")
     @Id
     private int gameId;
@@ -19,6 +19,28 @@ public class Move implements Serializable {
 
     @Column(name = "symbol")
     private int symbol;
+
+    @Column(name = "winner")
+    private String winner;
+
+    @Column(name = "last_move")
+    private String lastMove;
+
+    public String getWinner() {
+        return winner;
+    }
+
+    public void setWinner(String winner) {
+        this.winner = winner;
+    }
+
+    public String getLastMove() {
+        return lastMove;
+    }
+
+    public void setLastMove(String lastMove) {
+        this.lastMove = lastMove;
+    }
 
     public int getPosition() {
         return position;
@@ -51,4 +73,6 @@ public class Move implements Serializable {
     public void setGameId(int gameId) {
         this.gameId = gameId;
     }
+
+
 }

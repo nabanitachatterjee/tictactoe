@@ -3,7 +3,7 @@ package com.gameboard.tictactoe.utilities;
 public final class GameBoard {
 
     public static int[] createFreshGameBoard() {
-        return new int[]{-1, -1, -1, -1, -1, -1, -1, -1};
+        return new int[]{-1, -1, -1, -1, -1, -1, -1, -1,-1};
     }
 
     public static boolean boardHasEmptySpaces(int[] board) {
