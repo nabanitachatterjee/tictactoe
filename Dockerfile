@@ -5,4 +5,4 @@ FROM openjdk:11
 COPY target/*.jar app.jar
 
 # how to run
-CMD ["java", "-jar", "-Dspring.profiles.active=docker", "app.jar"]
+CMD ["java", "-jar", "-Dspring.profiles.active=docker", "-Xmx300m", "-Xms300m","app.jar"]
