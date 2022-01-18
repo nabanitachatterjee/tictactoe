@@ -9,15 +9,11 @@ import com.gameboard.tictactoe.model.Move;
 import com.gameboard.tictactoe.repository.GameBoardRepository;
 import com.gameboard.tictactoe.repository.MovesRepository;
 import com.gameboard.tictactoe.utilities.GameBoard;
-import liquibase.pro.packaged.M;
 import org.springframework.stereotype.Service;
 
 import javax.persistence.EntityNotFoundException;
 import javax.servlet.http.HttpServletRequest;
 import javax.servlet.http.HttpSession;
-import javax.transaction.Transactional;
-import java.util.ArrayList;
-import java.util.List;
 import java.util.Optional;
 import java.util.Random;
 
@@ -70,7 +66,7 @@ public class TicTacToeService {
 
     private void checkWinner(TicTacToeIO response, Move move) {
         try {
-            if (move.getWinner().equalsIgnoreCase("Y")) {
+            if (move != null && move.getWinner().equalsIgnoreCase("Y")) {
                 response.setWinner(String.valueOf(move.getPlayer()));
             }
         } catch (EntityNotFoundException e) {
@@ -79,13 +75,7 @@ public class TicTacToeService {
     }
 
     public Move queryMoveForSessionId(int sessionId) {
-        Move move = new Move();
-        try {
-            move = movesRepository.getById(sessionId);
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
-        return move;
+        return movesRepository.findById(sessionId).orElse(null);
     }
 
     public boolean checkValidPositionAndSymbol(int[] board, PlayerMove playerMove, int player, int sessionId) throws MovesNotAllowedException {
@@ -99,11 +89,6 @@ public class TicTacToeService {
         }
         board[playerMove.getPosition()] = playerMove.getSymbol();
         addMoves(player, sessionId, playerMove);
-        Move move = new Move();
-        move.setGameId(sessionId);
-        move.setWinner("N");
-        move.setLastMove("Y");
-        movesRepository.save(move);
         return checkWinner(board, playerMove.getSymbol());
     }
 
@@ -124,11 +109,18 @@ public class TicTacToeService {
             } else {
                 board[emptySpaces[computerPosition]] = 1;
             }
+            Move move = new Move();
+            move.setPlayer(0);
+            move.setGameId(sessionId);
+            move.setSymbol(board[emptySpaces[computerPosition]]);
+            move.setPosition(playerMove.getPosition());
+            move.setWinner("N");
+            move.setLastMove("Y");
+            movesRepository.save(move);
         } else {
             throw new MovesNotAllowedException("No empty position left.Match drawn.");
         }
-        addMoves(0, sessionId, playerMove);
-        //    movesRepository.updateLastMove("N",sessionId,1);
+
         return checkWinner(board, 1);
     }
 
@@ -147,7 +139,7 @@ public class TicTacToeService {
         if (null == gameType || !gameType.equalsIgnoreCase("MULTI")) {
             if (player == 1) {
                 if (playerMove(player, playerMove, board, ticTacToeIO, sessionId)) {
-                    //    movesRepository.updateWinner("Y", sessionId, player);
+                    updateMovesIfWinner(player, playerMove, sessionId);
                     return board;
                 }
 
@@ -156,7 +148,7 @@ public class TicTacToeService {
                 return board;
             }
             if (setComputerMove(board, ticTacToeIO, playerMove, sessionId)) {
-                //         movesRepository.updateWinner("Y", sessionId, 0);
+                updateMovesIfWinner(0, playerMove, sessionId);
                 return board;
             }
         } else {
@@ -166,6 +158,17 @@ public class TicTacToeService {
         }
         return board;
 
+    }
+
+    private void updateMovesIfWinner(int player, PlayerMove playerMove, int sessionId) {
+        Move move = new Move();
+        move.setPlayer(player);
+        move.setGameId(sessionId);
+        move.setSymbol(playerMove.getSymbol());
+        move.setPosition(playerMove.getPosition());
+        move.setWinner("Y");
+        move.setLastMove("Y");
+        movesRepository.save(move);
     }
 
     private boolean setPlayerMoves(int player, PlayerMove playerMove, int[] board, TicTacToeIO ticTacToeIO, int sessionId) {
@@ -184,13 +187,17 @@ public class TicTacToeService {
 
     private void validateLastMove(PlayerMove playerMove, int player, int sessionId) {
         //query last move from moves for particular sessionid
-        Move move = movesRepository.getById(sessionId);
-       // if (optionalMove.isPresent()) {
-            //Move move = optionalMove.get();
+        try {
+            Move move = movesRepository.findById(sessionId).orElse(null);
+            if (move == null){
+                return;
+            }
             if (move.getPlayer() != player && move.getSymbol() == playerMove.getSymbol()) {
                 throw new MovesNotAllowedException("You entered wrong symbol");
             }
-        //}
+        } catch (EntityNotFoundException e) {
+            e.printStackTrace();
+        }
     }
 
     private boolean setComputerMove(int[] board, TicTacToeIO ticTacToeIO, PlayerMove playerMove, int sessionId) {

@@ -8,7 +8,6 @@ import java.io.Serializable;
 public class Move implements Serializable {
     @Column(name = "player")
     private int player;
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     @Column(name = "game_id")
     @Id
     private int gameId;

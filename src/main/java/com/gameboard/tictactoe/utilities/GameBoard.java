@@ -16,9 +16,4 @@ public final class GameBoard {
         }
         return hasEmptySpaces;
     }
-
-    public static boolean isEmpty(int place) {
-        return place == -1;
-    }
-
 }
