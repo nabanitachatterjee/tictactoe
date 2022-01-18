@@ -34,6 +34,8 @@ public class TicTacToeService {
         Game game = new Game();
         if ("MULTIPLAYER".equalsIgnoreCase(gameType)) {
             game.setGameType("MULTI");
+        }else{
+            game.setGameType("SINGLE");
         }
         Game savedGame = gameBoardRepository.save(game);
         TicTacToeIO response = new TicTacToeIO();
@@ -173,16 +175,17 @@ public class TicTacToeService {
 
     private boolean setPlayerMoves(int player, PlayerMove playerMove, int[] board, TicTacToeIO ticTacToeIO, int sessionId) {
         if (player == 1 && playerMove(player, playerMove, board, ticTacToeIO, sessionId)) {
-            addMoves(player, sessionId, playerMove);
+            updateMovesIfWinner(player, playerMove,sessionId);
             return true;
 
         } else if (player == 2 && playerMove(player, playerMove, board, ticTacToeIO, sessionId)) {
-            addMoves(player, sessionId, playerMove);
+            updateMovesIfWinner(player,playerMove,sessionId);
             return true;
-        } else {
+        } else if(player>2){
             ticTacToeIO.setErrorMessage("Only 2 players are playing");
             return true;
         }
+        return false;
     }
 
     private void validateLastMove(PlayerMove playerMove, int player, int sessionId) {
@@ -194,6 +197,9 @@ public class TicTacToeService {
             }
             if (move.getPlayer() != player && move.getSymbol() == playerMove.getSymbol()) {
                 throw new MovesNotAllowedException("You entered wrong symbol");
+            }
+            if(move.getPlayer()==player){
+                throw new MovesNotAllowedException("Not your chance this time");
             }
         } catch (EntityNotFoundException e) {
             e.printStackTrace();
