@@ -22,7 +22,7 @@ jobs:
      run : mvn clean install
      
    - name : Build, Push and Release a docker container to Heroku.
-     uses : gounit/heroku-docker-deploy@v1.3.3
+     uses : gonuit/heroku-docker-deploy@v1.3.3
      with:
      
       email : ${{ secrets.HEROKU_EMAIL }}
