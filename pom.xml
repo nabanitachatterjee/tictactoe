@@ -12,7 +12,7 @@
 	<artifactId>tictactoe</artifactId>
 	<version>0.0.1-SNAPSHOT</version>
 	<name>tictactoe</name>
-	<description>Demo project for Spring Boot</description>
+	<description>Spring boot project for tictactoe</description>
 	<properties>
 		<java.version>11</java.version>
 		<maven.compiler.source>11</maven.compiler.source>
